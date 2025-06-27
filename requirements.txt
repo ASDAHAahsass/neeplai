@@ -1,0 +1,3 @@
+pip install gunicorn
+pip install flask
+pip install openai
