@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeeplAI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-deep-dark: #0d0d0f; --bg-surface: #1a1a1c; --bg-inset: #242426;
+            --accent-blue: #007aff; --accent-blue-hover: #3395ff; --text-primary: #f5f5f7;
+            --text-secondary: #8e8e93; --border-color: #3a3a3c; --font-main: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { font-size: 16px; }
+        body { font-family: var(--font-main); background-color: var(--bg-deep-dark); color: var(--text-primary); overflow: hidden; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        
+        #preloader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-deep-dark); display: flex; justify-content: center; align-items: center; z-index: 10000; transition: opacity 0.6s ease-out, visibility 0.6s ease-out; transition-delay: 0.4s; }
+        #preloader.hidden { opacity: 0; visibility: hidden; }
+        #loader-svg { width: 90px; height: 90px; }
+        #loader-svg .track { stroke: var(--bg-inset); stroke-width: 4; fill: none; }
+        #loader-svg .progress { stroke: var(--accent-blue); stroke-width: 4; fill: none; stroke-linecap: round; stroke-dasharray: 251.2; stroke-dashoffset: 251.2; transform-origin: center; transform: rotate(-90deg); animation: draw-circle 2s cubic-bezier(0.65, 0, 0.35, 1) forwards; }
+        #loader-svg .logo-n { stroke: var(--text-primary); stroke-width: 8; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 150; stroke-dashoffset: 150; opacity: 0; animation: draw-logo 1.5s ease-out 0.5s forwards; }
+        @keyframes draw-circle { to { stroke-dashoffset: 0; } }
+        @keyframes draw-logo { 50% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 1; } }
+        
+        #app-container { display: flex; flex-direction: column; height: 100vh; opacity: 0; transition: opacity 0.6s ease-in; }
+        #app-container.visible { opacity: 1; }
+        #app-layout { display: flex; flex-grow: 1; overflow: hidden; }
+
+        #sidebar { width: 280px; flex-shrink: 0; background-color: var(--bg-surface); display: flex; flex-direction: column; padding: 1rem; gap: 1rem; border-right: 1px solid var(--border-color); }
+        #new-chat-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.75rem; background-color: var(--accent-blue); color: white; border: none; border-radius: 8px; font-size: 1em; font-weight: 500; cursor: pointer; transition: background-color 0.2s; }
+        #new-chat-btn:hover { background-color: var(--accent-blue-hover); }
+        #chat-list-container { flex-grow: 1; overflow-y: auto; }
+        #chat-list { list-style: none; }
+        .chat-list-item { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem; border-radius: 6px; cursor: pointer; transition: background-color 0.2s; margin-bottom: 0.5rem; }
+        .chat-list-item.active { background-color: var(--bg-inset); }
+        .chat-list-item:not(.active):hover { background-color: var(--bg-inset); }
+        .chat-title-container { flex-grow: 1; overflow: hidden; }
+        .chat-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; display: block; }
+        .rename-input { width: 100%; background-color: #3a3a3c; border: 1px solid var(--accent-blue); border-radius: 4px; color: var(--text-primary); font-family: var(--font-main); font-size: 1em; padding: 0.1rem 0.3rem; }
+        .chat-actions { display: flex; align-items: center; flex-shrink: 0; }
+        .delete-chat-btn { background: none; border: none; color: var(--text-secondary); font-size: 1em; cursor: pointer; padding: 5px; opacity: 0; transition: opacity 0.2s, color 0.2s; }
+        .chat-list-item:hover .delete-chat-btn { opacity: 0.7; }
+        .delete-chat-btn:hover { opacity: 1; color: #ff4d4d; }
+        
+        #chat-wrapper { flex-grow: 1; display: flex; flex-direction: column; background-color: var(--bg-deep-dark); }
+        #chat-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        #chat-header h1 { font-size: 1.2em; font-weight: 600; }
+        #model-selector { padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--bg-inset); color: var(--text-primary); cursor: pointer; }
+        #chat-box { flex-grow: 1; padding: 1.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+        
+        .message { max-width: 80%; line-height: 1.6; animation: fadeIn 0.4s ease-out; align-self: flex-start; position: relative; }
+        .user-message { align-self: flex-end; }
+        .message-content { padding: 0.8rem 1.2rem; border-radius: 18px; white-space: pre-wrap; word-wrap: break-word; }
+        .user-message .message-content { background-color: var(--accent-blue); color: white; border-bottom-right-radius: 4px; }
+        .ai-message .message-content { background-color: var(--bg-surface); color: var(--text-primary); border-bottom-left-radius: 4px; }
+        .system-message { font-style: italic; color: var(--text-secondary); align-self: center; background: none; padding: 0.5rem 1rem; font-size: 0.9em; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .edit-btn { position: absolute; top: 50%; left: -35px; transform: translateY(-50%); background: var(--bg-inset); border: 1px solid var(--border-color); border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity 0.2s; }
+        .user-message:hover .edit-btn { opacity: 1; }
+        .edit-btn:hover { background-color: var(--accent-blue); }
+        .edit-btn svg { width: 16px; height: 16px; }
+        .edit-container { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem; background-color: var(--bg-surface); border-radius: 12px; width: 100%; }
+        .edit-textarea { width: 100%; min-height: 80px; background-color: var(--bg-inset); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-family: var(--font-main); padding: 0.5rem; resize: vertical; }
+        .edit-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+        .edit-actions button { padding: 0.4rem 0.8rem; border-radius: 6px; border: none; cursor: pointer; }
+
+        .code-block-wrapper { background-color: #0d0d0f; border: 1px solid var(--border-color); border-radius: 8px; margin-top: 0.5rem; overflow: hidden; }
+        .code-block-header { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.8rem; background-color: var(--bg-inset); font-size: 0.8em; color: var(--text-secondary); }
+        .copy-code-btn { background-color: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.2rem 0.6rem; cursor: pointer; transition: all 0.2s; }
+        .copy-code-btn:hover { background-color: var(--accent-blue); color: white; border-color: var(--accent-blue); }
+        pre { padding: 1rem; margin: 0 !important; overflow-x: auto; font-family: var(--font-mono); font-size: 0.9em; }
+        code { font-family: var(--font-mono); }
+
+        .loading-indicator { align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 0.8rem 1.2rem; background-color: var(--bg-surface); border-radius: 18px; border-bottom-left-radius: 4px; }
+        .loading-indicator .dot { width: 8px; height: 8px; background-color: var(--text-secondary); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .loading-indicator .dot:nth-child(1) { animation-delay: -0.32s; }
+        .loading-indicator .dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+        
+        #chat-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); }
+        #chat-form { display: flex; gap: 0.75rem; align-items: center; background-color: var(--bg-surface); border-radius: 12px; padding: 0.5rem; border: 1px solid var(--border-color); }
+        #user-input { flex-grow: 1; border: none; padding: 0.75rem 1rem; font-size: 1em; outline: none; background: transparent; color: var(--text-primary); }
+        #send-button { background-color: var(--accent-blue); color: white; border: none; border-radius: 8px; width: 44px; height: 44px; cursor: pointer; transition: background-color 0.2s; display: flex; justify-content: center; align-items: center; flex-shrink: 0; }
+        #send-button:hover { background-color: var(--accent-blue-hover); }
+        #send-button:disabled { background-color: #555; cursor: not-allowed; }
+        
+        #main-footer { background-color: var(--bg-surface); color: var(--text-secondary); display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 0.75em; padding: 0.5rem; border-top: 1px solid var(--border-color); line-height: 1.4; }
+        #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 20000; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+        #modal-overlay.visible { opacity: 1; visibility: visible; }
+        #modal-box { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; width: 90%; max-width: 400px; text-align: center; transform: scale(0.95); transition: transform 0.3s ease; }
+        #modal-overlay.visible #modal-box { transform: scale(1); }
+        #modal-title { font-size: 1.25em; font-weight: 600; margin-bottom: 0.75rem; }
+        #modal-message { color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.5; }
+        #modal-buttons { display: flex; gap: 1rem; }
+        .modal-btn { flex-grow: 1; padding: 0.75rem; border: none; border-radius: 8px; font-size: 1em; font-weight: 500; cursor: pointer; transition: background-color 0.2s; }
+        #modal-cancel-btn { background-color: var(--bg-inset); color: var(--text-primary); }
+        #modal-cancel-btn:hover { background-color: #3a3a3c; }
+        #modal-confirm-btn { background-color: #d9534f; color: white; }
+        #modal-confirm-btn.alert { background-color: var(--accent-blue); }
+        #modal-confirm-btn:hover { background-color: #c9302c; }
+        #modal-confirm-btn.alert:hover { background-color: var(--accent-blue-hover); }
+    </style>
+</head>
+<body>
+
+<div id="preloader"><svg id="loader-svg" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="40" /><circle class="progress" cx="50" cy="50" r="40" /><path class="logo-n" d="M30 70 L30 30 L70 70 L70 30" /></svg></div>
+<div id="modal-overlay"><div id="modal-box"><h3 id="modal-title">Подтверждение</h3><p id="modal-message">Вы уверены?</p><div id="modal-buttons"><button id="modal-cancel-btn" class="modal-btn">Отмена</button><button id="modal-confirm-btn" class="modal-btn">Подтвердить</button></div></div></div>
+
+<div id="app-container">
+    <div id="app-layout">
+        <aside id="sidebar">
+            <button id="new-chat-btn"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6Z"></path></svg><span>Новый чат</span></button>
+            <div id="chat-list-container"><ul id="chat-list"></ul></div>
+        </aside>
+        <main id="chat-wrapper">
+            <header id="chat-header"><h1 id="current-chat-title"></h1><div class="model-selector-wrapper"><label for="model-selector">Модель:</label><select id="model-selector"></select></div></header>
+            <div id="chat-box"></div>
+            <footer id="chat-footer"><form id="chat-form"><input type="text" id="user-input" placeholder="Спросите что-нибудь у N-Project..." autocomplete="off" required><button type="submit" id="send-button" title="Отправить"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20v-6l8-2-8-2V4l19 8-19 8Z"></path></svg></button></form></footer>
+        </main>
+    </div>
+    <footer id="main-footer"><div>N - Disgn</div><div>N-Project копирование запрещенно!</div></footer>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- ЗАПРЕТ ПРАВОЙ КНОПКИ МЫШИ ---
+    document.addEventListener('contextmenu', event => event.preventDefault());
+
+    // --- ЭЛЕМЕНТЫ DOM ---
+    const preloader = document.getElementById('preloader');
+    const appContainer = document.getElementById('app-container');
+    const chatBox = document.getElementById('chat-box');
+    const chatForm = document.getElementById('chat-form');
+    const userInput = document.getElementById('user-input');
+    const sendButton = document.getElementById('send-button');
+    const modelSelector = document.getElementById('model-selector');
+    const newChatBtn = document.getElementById('new-chat-btn');
+    const chatList = document.getElementById('chat-list');
+    const currentChatTitle = document.getElementById('current-chat-title');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalTitle = document.getElementById('modal-title');
+    const modalMessage = document.getElementById('modal-message');
+    const modalCancelBtn = document.getElementById('modal-cancel-btn');
+    const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+
+    // --- КОНФИГУРАЦИЯ И СОСТОЯНИЕ ---
+    const SERVER_URL = '/chat';
+    const MODELS = { "gemini-2.5-pro-preview-05-06": "Gemini 2.5 Pro", "gemini-2.5-flash-preview-04-17": "Gemini 2.5 Flash", "gpt-4o": "GPT-4o", "gpt-4o-mini": "GPT-4o Mini", "gpt-4.1": "GPT-4.1", "gpt-4.1-nano": "GPT-4.1 Nano", "o4-mini": "o4-mini", "o3": "o3", "o3-mini": "o3-mini" };
+    let appData = {}, userID = null, onConfirmCallback = null;
+
+    // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+    const generateUUID = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+    const saveData = () => { if(userID) localStorage.setItem(`chatApp_data_${userID}`, JSON.stringify(appData)); };
+    const loadData = () => { userID = localStorage.getItem('userID'); if (!userID) { userID = generateUUID(); localStorage.setItem('userID', userID); } const savedData = localStorage.getItem(`chatApp_data_${userID}`); if (savedData) { appData = JSON.parse(savedData); } else { const newChatId = generateUUID(); appData = { currentChatId: newChatId, chats: { [newChatId]: { title: "Новый чат", messages: [{ role: 'assistant', content: 'Добро пожаловать в N-Project! Чем могу помочь?' }], lastModified: Date.now() } } }; saveData(); } };
+    const scrollToBottom = () => { chatBox.scrollTop = chatBox.scrollHeight; };
+
+    // --- ЛОГИКА МОДАЛЬНОГО ОКНА ---
+    function showModal({ title, message, confirmText = 'Подтвердить', cancelText = 'Отмена', isAlert = false }) { modalTitle.textContent = title; modalMessage.textContent = message; modalConfirmBtn.textContent = confirmText; modalCancelBtn.textContent = cancelText; modalCancelBtn.style.display = isAlert ? 'none' : 'block'; modalConfirmBtn.classList.toggle('alert', isAlert); if(isAlert) modalConfirmBtn.textContent = 'ОК'; modalOverlay.classList.add('visible'); }
+    function hideModal() { modalOverlay.classList.remove('visible'); onConfirmCallback = null; }
+    function showConfirmation(message, onConfirm) { onConfirmCallback = onConfirm; showModal({ title: 'Подтвердите действие', message: message }); }
+    function showAlert(message) { showModal({ title: 'Внимание', message: message, isAlert: true }); }
+    
+    // --- ОСНОВНЫЕ ФУНКЦИИ ПРИЛОЖЕНИЯ ---
+    function renderSidebar() {
+        chatList.innerHTML = '';
+        const sortedChats = Object.entries(appData.chats).sort((a, b) => (b[1].lastModified || 0) - (a[1].lastModified || 0));
+        for (const [chatId, chat] of sortedChats) {
+            const listItem = document.createElement('li');
+            listItem.className = 'chat-list-item';
+            listItem.dataset.chatId = chatId;
+            if (chatId === appData.currentChatId) listItem.classList.add('active');
+            
+            const titleContainer = document.createElement('div');
+            titleContainer.className = 'chat-title-container';
+            titleContainer.innerHTML = `<span class="chat-title">${chat.title}</span>`;
+
+            const actionsContainer = document.createElement('div');
+            actionsContainer.className = 'chat-actions';
+            actionsContainer.innerHTML = `<button class="delete-chat-btn" title="Удалить чат"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 21q-.825 0-1.412-.587Q5 19.825 5 19V6H4V4h5V3h6v1h5v2h-1v13q0 .825-.587 1.413Q17.825 21 17 21ZM17 6H7v13h10Z"></path></svg></button>`;
+            
+            listItem.appendChild(titleContainer);
+            listItem.appendChild(actionsContainer);
+
+            titleContainer.addEventListener('dblclick', () => {
+                const currentTitle = appData.chats[chatId].title;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'rename-input';
+                input.value = currentTitle;
+                titleContainer.innerHTML = '';
+                titleContainer.appendChild(input);
+                input.focus();
+                input.select();
+
+                const saveRename = () => {
+                    const newTitle = input.value.trim();
+                    if (newTitle && newTitle !== currentTitle) {
+                        appData.chats[chatId].title = newTitle;
+                        saveData();
+                    }
+                    renderSidebar();
+                    renderCurrentChat();
+                };
+                input.addEventListener('blur', saveRename);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') input.blur();
+                    if (e.key === 'Escape') renderSidebar();
+                });
+            });
+
+            actionsContainer.querySelector('.delete-chat-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                showConfirmation(`Вы уверены, что хотите удалить чат "${chat.title}"?`, () => deleteChat(chatId));
+            });
+
+            listItem.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('rename-input') && !e.target.closest('.delete-chat-btn')) {
+                    appData.currentChatId = chatId;
+                    saveData();
+                    renderCurrentChat();
+                    renderSidebar();
+                }
+            });
+            chatList.appendChild(listItem);
+        }
+    }
+
+    function addMessageToBox(messageObject, isLastUserMessage = false) {
+        const { role, content } = messageObject;
+        const messageContainer = document.createElement('div');
+        messageContainer.classList.add('message', role === 'user' ? 'user-message' : 'ai-message');
+        
+        if (role === 'user' && isLastUserMessage) {
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-btn';
+            editBtn.title = 'Редактировать и отправить заново';
+            editBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5 19h1.4l8.625-8.625-1.4-1.4L5 17.6V19ZM19.3 8.925l-4.25-4.2L17.875 1.9q.575-.575 1.413-.575t1.412.575l1.4 1.4q.575.575.575 1.413t-.575 1.412L19.3 8.925ZM17.85 10.4L7.25 21H3v-4.25l10.6-10.6l4.25 4.25Z"></path></svg>`;
+            editBtn.onclick = () => handleEditClick(messageContainer, messageObject);
+            messageContainer.appendChild(editBtn);
+        }
+
+        const codeBlockRegex = /```(\w*)\n([\s\S]*?)\n```/g;
+        let lastIndex = 0, hasCode = false, match;
+        
+        if (role === 'assistant' && content.includes('```')) {
+            while ((match = codeBlockRegex.exec(content)) !== null) {
+                hasCode = true;
+                const textBefore = content.substring(lastIndex, match.index);
+                if (textBefore.trim()) {
+                    const textNode = document.createElement('div');
+                    textNode.className = 'message-content';
+                    textNode.textContent = textBefore;
+                    messageContainer.appendChild(textNode);
+                }
+                const lang = match[1] || 'text';
+                const code = match[2];
+                const codeWrapper = document.createElement('div');
+                codeWrapper.className = 'code-block-wrapper';
+                const header = document.createElement('div');
+                header.className = 'code-block-header';
+                const langSpan = document.createElement('span');
+                langSpan.textContent = lang;
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'copy-code-btn';
+                copyBtn.textContent = 'Copy';
+                copyBtn.onclick = () => { navigator.clipboard.writeText(code).then(() => { copyBtn.textContent = 'Copied!'; setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000); }); };
+                header.appendChild(langSpan);
+                header.appendChild(copyBtn);
+                const pre = document.createElement('pre');
+                const codeEl = document.createElement('code');
+                codeEl.textContent = code;
+                pre.appendChild(codeEl);
+                codeWrapper.appendChild(header);
+                codeWrapper.appendChild(pre);
+                messageContainer.appendChild(codeWrapper);
+                lastIndex = match.index + match[0].length;
+            }
+        }
+        
+        const textAfter = content.substring(lastIndex);
+        if (textAfter.trim() || !hasCode) {
+            const contentDiv = document.createElement('div');
+            contentDiv.textContent = hasCode ? textAfter : content;
+            contentDiv.className = 'message-content';
+            messageContainer.appendChild(contentDiv);
+        }
+        
+        chatBox.appendChild(messageContainer);
+        return messageContainer;
+    }
+
+    function renderCurrentChat() {
+        chatBox.innerHTML = '';
+        const currentChat = appData.chats[appData.currentChatId];
+        if (!currentChat) { createNewChat(); return; }
+        currentChatTitle.textContent = currentChat.title;
+        
+        const userMessages = currentChat.messages.filter(m => m.role === 'user');
+        const lastUserMessage = userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
+
+        currentChat.messages.forEach(msg => {
+            addMessageToBox(msg, msg === lastUserMessage);
+        });
+        scrollToBottom();
+    }
+
+    function handleEditClick(messageContainer, messageObject) {
+        messageContainer.innerHTML = '';
+        const editContainer = document.createElement('div');
+        editContainer.className = 'edit-container';
+        
+        const textarea = document.createElement('textarea');
+        textarea.className = 'edit-textarea';
+        textarea.value = messageObject.content;
+        
+        const actions = document.createElement('div');
+        actions.className = 'edit-actions';
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Отмена';
+        cancelBtn.className = 'modal-btn';
+        cancelBtn.style.backgroundColor = 'var(--bg-inset)';
+        cancelBtn.onclick = () => renderCurrentChat();
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Сохранить и отправить';
+        saveBtn.className = 'modal-btn';
+        saveBtn.style.backgroundColor = 'var(--accent-blue)';
+        saveBtn.onclick = () => {
+            const newContent = textarea.value.trim();
+            if (newContent && newContent !== messageObject.content) {
+                const history = appData.chats[appData.currentChatId].messages;
+                const msgIndex = history.findIndex(m => m === messageObject);
+                history[msgIndex].content = newContent;
+                history.splice(msgIndex + 1);
+                saveData();
+                renderCurrentChat();
+                submitRequest(newContent, history.slice(0, -1));
+            } else {
+                renderCurrentChat();
+            }
+        };
+        
+        actions.appendChild(cancelBtn);
+        actions.appendChild(saveBtn);
+        editContainer.appendChild(textarea);
+        editContainer.appendChild(actions);
+        messageContainer.appendChild(editContainer);
+        textarea.focus();
+    }
+
+    async function submitRequest(messageText, historyForApi) {
+        sendButton.disabled = true;
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.id = 'loading-indicator';
+        loadingIndicator.className = 'loading-indicator';
+        loadingIndicator.innerHTML = `<div class="dot"></div><div class="dot"></div><div class="dot"></div>`;
+        chatBox.appendChild(loadingIndicator);
+        scrollToBottom();
+
+        try {
+            const response = await fetch(SERVER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: messageText,
+                    model: modelSelector.value,
+                    history: historyForApi
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const aiMessage = { role: 'assistant', content: data.reply };
+            
+            const currentChat = appData.chats[appData.currentChatId];
+            currentChat.messages.push(aiMessage);
+            saveData();
+            addMessageToBox(aiMessage);
+
+        } catch (error) {
+            addMessageToBox({ role: 'system', content: `Ошибка: ${error.message}` });
+        } finally {
+            loadingIndicator.remove();
+            sendButton.disabled = false;
+            userInput.focus();
+            scrollToBottom();
+        }
+    }
+
+    function handleFormSubmit(event) {
+        event.preventDefault();
+        const userMessageText = userInput.value.trim();
+        if (userMessageText === '' || !appData.currentChatId) return;
+        
+        const currentChat = appData.chats[appData.currentChatId];
+        if (currentChat.title === "Новый чат") {
+            currentChat.title = userMessageText.substring(0, 30) + (userMessageText.length > 30 ? '...' : '');
+        }
+        
+        const userMessage = { role: 'user', content: userMessageText };
+        currentChat.messages.push(userMessage);
+        currentChat.lastModified = Date.now();
+        saveData();
+        renderSidebar();
+        renderCurrentChat();
+        
+        userInput.value = '';
+        
+        const historyForApi = currentChat.messages.slice(0, -1);
+        submitRequest(userMessageText, historyForApi);
+    }
+    
+    function createNewChat() {
+        const newChatId = generateUUID();
+        appData.chats[newChatId] = { title: "Новый чат", messages: [{ role: 'assistant', content: 'Новый чат создан. Задайте свой вопрос!' }], lastModified: Date.now() };
+        appData.currentChatId = newChatId;
+        saveData();
+        renderSidebar();
+        renderCurrentChat();
+    }
+
+    function deleteChat(chatId) {
+        if (Object.keys(appData.chats).length <= 1) {
+            showAlert("Нельзя удалить последний чат.");
+            return;
+        }
+        delete appData.chats[chatId];
+        if (appData.currentChatId === chatId) {
+            const latestChatId = Object.keys(appData.chats).sort((a,b) => appData.chats[b].lastModified - appData.chats[a].lastModified)[0];
+            appData.currentChatId = latestChatId;
+        }
+        saveData();
+        renderSidebar();
+        renderCurrentChat();
+    }
+
+    function init() {
+        setTimeout(() => {
+            preloader.classList.add('hidden');
+            appContainer.classList.add('visible');
+        }, 2500);
+        
+        loadData();
+        for (const [apiKey, displayName] of Object.entries(MODELS)) {
+            const option = document.createElement('option');
+            option.value = apiKey;
+            option.textContent = displayName;
+            modelSelector.appendChild(option);
+        }
+        const savedModel = localStorage.getItem('selectedModel');
+        if (savedModel && MODELS[savedModel]) modelSelector.value = savedModel;
+        
+        modelSelector.addEventListener('change', () => localStorage.setItem('selectedModel', modelSelector.value));
+        newChatBtn.addEventListener('click', createNewChat);
+        chatForm.addEventListener('submit', handleFormSubmit);
+        modalConfirmBtn.addEventListener('click', () => { if (onConfirmCallback) onConfirmCallback(); hideModal(); });
+        modalCancelBtn.addEventListener('click', hideModal);
+        modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) hideModal(); });
+
+        renderSidebar();
+        renderCurrentChat();
+    }
+
+    init();
+});
+</script>
+
+</body>
+</html>
